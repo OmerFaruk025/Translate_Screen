@@ -5,7 +5,7 @@ from googletrans import Translator
 import tkinter as tk
 import time
 import re
-import difflib  # Metinleri birbirine dikmek için gerekli
+import difflib
 
 class AreaSelector:
     def __init__(self):
@@ -62,91 +62,94 @@ class ScreenTranslator:
     def __init__(self):
         self.mss_instance = mss.mss()
         self.translator = Translator()
-        self.buffer = "" # Uzun cümleleri biriktirdiğimiz kumbara
+        self.buffer = ""
+        self.next_update_time = 0 # Yeni çeviri için beklenen minimum zaman
+
+    def calculate_display_time(self, text, is_lagging=False):
+        """Metnin uzunluğuna ve lag durumuna göre kalma süresi belirler."""
+        base_time = 1.2 # Minimum kalma süresi
+        char_bonus = len(text) * 0.04 # Her harf için 0.04 saniye ekle
+        
+        total_time = base_time + char_bonus
+        
+        # Eğer arkada birikmiş cümleler varsa süreyi %50 kısalt ki yetişelim
+        if is_lagging:
+            total_time *= 0.5
+            
+        return min(total_time, 4.5) # Ne olursa olsun bir cümle 4.5 saniyeden fazla kalmasın
 
     def find_overlap_and_stitch(self, new_text):
-        """Eski metinle yeniyi karşılaştırıp sadece farkı ekler."""
-        if not self.buffer:
-            return new_text
-        
-        # En uzun ortak kısmı bul (Youtube'un kaydırdığı metni yakalar)
+        if not self.buffer: return new_text
         s = difflib.SequenceMatcher(None, self.buffer, new_text)
         match = s.find_longest_match(0, len(self.buffer), 0, len(new_text))
-        
-        # Eğer bir eşleşme varsa (genelde 3 karakterden fazlası tesadüf değildir)
         if match.size > 3:
             return self.buffer + new_text[match.b + match.size:]
         else:
             return self.buffer + " " + new_text
 
     def run(self):
-        print("\n--- Ömer'in Akıllı Çeviri Asistanı v2.3 ---")
-        print("1 - Normal Ekran Çevirisi (Statik)")
-        print("2 - YouTube Kusursuz Hafıza Modu (Dinamik)")
-        secim = input("Seçiminizi yapın (1/2): ")
-
+        print("\n--- Ömer'in Akıllı Çeviri Asistanı v2.4 ---")
+        print("1 - Normal Ekran Çevirisi")
+        print("2 - YouTube Kusursuz Hafıza Modu (Akıllı Zamanlama)")
+        secim = input("Seçim (1/2): ")
+        
         selector = AreaSelector()
         area = selector.get_selection()
         if not area or area["width"] < 10: return
-
-        if secim == "1":
-            self.normal_mode(area, selector.bg_img)
-        else:
-            self.live_mode(area)
+        if secim == "1": self.normal_mode(area, selector.bg_img)
+        else: self.live_mode(area)
 
     def normal_mode(self, area, full_img):
         img = full_img.crop((area["left"], area["top"], area["left"] + area["width"], area["top"] + area["height"]))
         text = pytesseract.image_to_string(img).strip()
         if text:
             tr = self.translator.translate(text, dest='tr')
-            print(f"\n[Orijinal]: {text}\n{'-'*20}\n[Türkçe]: {tr.text}")
+            print(f"\n[TR]: {tr.text}")
 
     def live_mode(self, area):
         overlay = OverlayWindow(area)
         last_raw_text = ""
         
-        print("Canlı takip aktif. Çıkmak için terminalde Ctrl+C yapın.")
         try:
             while True:
                 sct_img = self.mss_instance.grab(area)
                 img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
+                current_raw = " ".join(pytesseract.image_to_string(img).strip().split())
                 
-                # OCR metni al ve temizle
-                current_raw = pytesseract.image_to_string(img).strip()
-                current_raw = " ".join(current_raw.split()) 
-                
-                # Ekranda yeni bir şey gördüysek işle
                 if current_raw and current_raw != last_raw_text:
                     last_raw_text = current_raw
-                    
-                    # 1. ADIM: Yeni metni kumbaraya dikiyoruz
                     self.buffer = self.find_overlap_and_stitch(current_raw)
                     
-                    # 2. ADIM: Kumbarada bitmiş cümle var mı?
+                    # Bitmiş tüm cümleleri bul
                     sentences = re.findall(r'([^.!?]+[.!?])', self.buffer)
                     
                     if sentences:
-                        # En son biten tam cümleyi alıyoruz
-                        full_sentence = sentences[-1].strip()
+                        # LAG KONTROLÜ: Eğer kumbarada 1'den fazla cümle varsa geri kalıyoruz demektir
+                        is_lagging = len(sentences) > 1
                         
-                        try:
-                            # 3. ADIM: Çevir ve ekrana bas
-                            tr = self.translator.translate(full_sentence, dest='tr')
-                            overlay.update_text(tr.text)
+                        # Eğer güncelleme vaktimiz geldiyse veya çok geri kaldıysak hemen bas
+                        if time.time() >= self.next_update_time or len(sentences) > 2:
+                            # İlk biten cümleyi al (FIFO mantığı - İlk giren ilk çıkar)
+                            full_sentence = sentences[0].strip()
                             
-                            # 4. ADIM: Hafızayı temizle (Çevrilen kısmı at, geri kalanı sakla)
-                            # Regex re.escape kullanarak özel karakterlerden dolayı patlamasını engelledik
-                            match_iter = list(re.finditer(re.escape(full_sentence), self.buffer))
-                            if match_iter:
-                                last_match = match_iter[-1]
-                                self.buffer = self.buffer[last_match.end():].strip()
-                        except Exception as e:
-                            print(f"Hata: {e}")
+                            try:
+                                tr = self.translator.translate(full_sentence, dest='tr')
+                                overlay.update_text(tr.text)
+                                
+                                # Bir sonraki cümle için "bekleme süresi" ata
+                                display_duration = self.calculate_display_time(tr.text, is_lagging)
+                                self.next_update_time = time.time() + display_duration
+                                
+                                # Hafızadan sadece bu cümleyi sil
+                                match = re.search(re.escape(full_sentence), self.buffer)
+                                if match:
+                                    self.buffer = self.buffer[match.end():].strip()
+                            except: pass
                 
                 overlay.root.update()
-                time.sleep(0.4)
-        except Exception as e:
-            print(f"Canlı mod kapatıldı: {e}")
+                time.sleep(0.3)
+        except:
+            print("Canlı mod durduruldu.")
 
 if __name__ == "__main__":
     app = ScreenTranslator()
