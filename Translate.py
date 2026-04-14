@@ -5,8 +5,8 @@ from googletrans import Translator
 import tkinter as tk
 import time
 import re
+import difflib  # Metinleri birbirine dikmek için gerekli
 
-# AreaSelector sınıfı aynı kalıyor (O kısım zaten kusursuz)
 class AreaSelector:
     def __init__(self):
         self.root = tk.Tk()
@@ -50,7 +50,7 @@ class OverlayWindow:
         self.root.attributes("-topmost", True, "-alpha", 0.85)
         x, y = area["left"], area["top"] + area["height"] + 15
         self.root.geometry(f"{area['width']}x80+{x}+{y}")
-        self.label = tk.Label(self.root, text="Altyazı bekleniyor...", fg="#00FF00", bg="#121212", 
+        self.label = tk.Label(self.root, text="Sistem Hazır...", fg="#00FF00", bg="#121212", 
                               font=("Verdana", 11, "bold"), wraplength=area["width"]-20, justify="center")
         self.label.pack(fill="both", expand=True)
 
@@ -62,11 +62,27 @@ class ScreenTranslator:
     def __init__(self):
         self.mss_instance = mss.mss()
         self.translator = Translator()
+        self.buffer = "" # Uzun cümleleri biriktirdiğimiz kumbara
+
+    def find_overlap_and_stitch(self, new_text):
+        """Eski metinle yeniyi karşılaştırıp sadece farkı ekler."""
+        if not self.buffer:
+            return new_text
+        
+        # En uzun ortak kısmı bul (Youtube'un kaydırdığı metni yakalar)
+        s = difflib.SequenceMatcher(None, self.buffer, new_text)
+        match = s.find_longest_match(0, len(self.buffer), 0, len(new_text))
+        
+        # Eğer bir eşleşme varsa (genelde 3 karakterden fazlası tesadüf değildir)
+        if match.size > 3:
+            return self.buffer + new_text[match.b + match.size:]
+        else:
+            return self.buffer + " " + new_text
 
     def run(self):
-        print("\n--- Ömer'in Çeviri Asistanı v2.1 ---")
-        print("1 - Normal Ekran Çevirisi (Tek seferlik)")
-        print("2 - YouTube Canlı Altyazı Modu (Akıllı Çeviri)")
+        print("\n--- Ömer'in Akıllı Çeviri Asistanı v2.3 ---")
+        print("1 - Normal Ekran Çevirisi (Statik)")
+        print("2 - YouTube Kusursuz Hafıza Modu (Dinamik)")
         secim = input("Seçiminizi yapın (1/2): ")
 
         selector = AreaSelector()
@@ -87,7 +103,7 @@ class ScreenTranslator:
 
     def live_mode(self, area):
         overlay = OverlayWindow(area)
-        last_full_text = "" # Ekranda o an gördüğümüz tüm metin
+        last_raw_text = ""
         
         print("Canlı takip aktif. Çıkmak için terminalde Ctrl+C yapın.")
         try:
@@ -95,34 +111,37 @@ class ScreenTranslator:
                 sct_img = self.mss_instance.grab(area)
                 img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
                 
-                # OCR metni al ve tek satıra indir
+                # OCR metni al ve temizle
                 current_raw = pytesseract.image_to_string(img).strip()
                 current_raw = " ".join(current_raw.split()) 
                 
-                # Eğer ekrandaki metin değiştiyse işlemlere başla
-                if current_raw and current_raw != last_full_text:
-                    last_full_text = current_raw
+                # Ekranda yeni bir şey gördüysek işle
+                if current_raw and current_raw != last_raw_text:
+                    last_raw_text = current_raw
                     
-                    # Cümle bitiş işaretlerine göre böl (. ! ?)
-                    # Bu regex, işaretleri cümlenin sonunda tutarak böler
-                    sentences = re.findall(r'[^.!?]+[.!?]?', current_raw)
+                    # 1. ADIM: Yeni metni kumbaraya dikiyoruz
+                    self.buffer = self.find_overlap_and_stitch(current_raw)
+                    
+                    # 2. ADIM: Kumbarada bitmiş cümle var mı?
+                    sentences = re.findall(r'([^.!?]+[.!?])', self.buffer)
                     
                     if sentences:
-                        # En son biten cümleyi bul (Noktalama ile biten son tam parça)
-                        last_complete = ""
-                        for s in reversed(sentences):
-                            if any(mark in s for mark in ".!?"):
-                                last_complete = s.strip()
-                                break
+                        # En son biten tam cümleyi alıyoruz
+                        full_sentence = sentences[-1].strip()
                         
-                        # Eğer bitmiş yeni bir cümle bulduysak ve bu bir öncekiyle aynı değilse çevir
-                        if last_complete:
-                            try:
-                                tr = self.translator.translate(last_complete, dest='tr')
-                                # ESKİSİNİ SİL: Sadece bu son cümleyi ekranda göster
-                                overlay.update_text(tr.text)
-                            except Exception as e:
-                                print(f"Çeviri hatası: {e}")
+                        try:
+                            # 3. ADIM: Çevir ve ekrana bas
+                            tr = self.translator.translate(full_sentence, dest='tr')
+                            overlay.update_text(tr.text)
+                            
+                            # 4. ADIM: Hafızayı temizle (Çevrilen kısmı at, geri kalanı sakla)
+                            # Regex re.escape kullanarak özel karakterlerden dolayı patlamasını engelledik
+                            match_iter = list(re.finditer(re.escape(full_sentence), self.buffer))
+                            if match_iter:
+                                last_match = match_iter[-1]
+                                self.buffer = self.buffer[last_match.end():].strip()
+                        except Exception as e:
+                            print(f"Hata: {e}")
                 
                 overlay.root.update()
                 time.sleep(0.4)
