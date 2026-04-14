@@ -87,39 +87,47 @@ class ScreenTranslator:
 
     def live_mode(self, area):
         overlay = OverlayWindow(area)
-        buffer_text = ""
-        last_translated_sentence = ""
-
+        last_full_text = "" # Ekranda o an gördüğümüz tüm metin
+        
         print("Canlı takip aktif. Çıkmak için terminalde Ctrl+C yapın.")
         try:
             while True:
                 sct_img = self.mss_instance.grab(area)
                 img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
-                current_raw = pytesseract.image_to_string(img).strip()
                 
-                if current_raw and current_raw != buffer_text:
-                    buffer_text = current_raw
-                    # Cümleyi bitiren işaretleri kontrol et (. ! ?)
-                    # re.split ile metni noktalama işaretlerinden bölüyoruz ama işaretleri koruyoruz
-                    parts = re.split(r'([.!?])', current_raw)
+                # OCR metni al ve tek satıra indir
+                current_raw = pytesseract.image_to_string(img).strip()
+                current_raw = " ".join(current_raw.split()) 
+                
+                # Eğer ekrandaki metin değiştiyse işlemlere başla
+                if current_raw and current_raw != last_full_text:
+                    last_full_text = current_raw
                     
-                    complete_sentence = ""
-                    if len(parts) > 1:
-                        # En az bir nokta/ünlem/soru işareti bulundu
-                        # Son parçaya kadar olan her şeyi birleştir (Son parça genelde yarım kalan cümledir)
-                        complete_sentence = "".join(parts[:-1]).strip()
+                    # Cümle bitiş işaretlerine göre böl (. ! ?)
+                    # Bu regex, işaretleri cümlenin sonunda tutarak böler
+                    sentences = re.findall(r'[^.!?]+[.!?]?', current_raw)
                     
-                    if complete_sentence and complete_sentence != last_translated_sentence:
-                        try:
-                            tr = self.translator.translate(complete_sentence, dest='tr')
-                            overlay.update_text(tr.text)
-                            last_translated_sentence = complete_sentence
-                        except: pass
+                    if sentences:
+                        # En son biten cümleyi bul (Noktalama ile biten son tam parça)
+                        last_complete = ""
+                        for s in reversed(sentences):
+                            if any(mark in s for mark in ".!?"):
+                                last_complete = s.strip()
+                                break
+                        
+                        # Eğer bitmiş yeni bir cümle bulduysak ve bu bir öncekiyle aynı değilse çevir
+                        if last_complete:
+                            try:
+                                tr = self.translator.translate(last_complete, dest='tr')
+                                # ESKİSİNİ SİL: Sadece bu son cümleyi ekranda göster
+                                overlay.update_text(tr.text)
+                            except Exception as e:
+                                print(f"Çeviri hatası: {e}")
                 
                 overlay.root.update()
                 time.sleep(0.4)
-        except:
-            print("Canlı mod kapatıldı.")
+        except Exception as e:
+            print(f"Canlı mod kapatıldı: {e}")
 
 if __name__ == "__main__":
     app = ScreenTranslator()
