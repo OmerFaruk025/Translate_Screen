@@ -13,6 +13,7 @@ class AreaSelector:
     def __init__(self, master):
         self.top = tk.Toplevel(master)
         self.top.attributes('-fullscreen', True, "-topmost", True)
+        self.tk_bg_img = None
         
         try:
             with mss.mss() as sct:
@@ -21,7 +22,8 @@ class AreaSelector:
                 self.bg_img = Image.frombytes("RGB", screenshot.size, screenshot.bgra, "raw", "BGRX")
                 self.tk_bg_img = ImageTk.PhotoImage(self.bg_img, master=master)
         except Exception as e:
-            print(f"[SEÇİM HATASI]: {e}")
+            print(f"[EKRAN YAKALAMA HATASI]: {e}")
+            self.tk_bg_img = ImageTk.PhotoImage(Image.new("RGB", (1920, 1080), (0,0,0)), master=master)
 
         self.canvas = tk.Canvas(self.top, cursor="cross", highlightthickness=0)
         self.canvas.pack(fill="both", expand=True)
@@ -66,9 +68,18 @@ class OverlayWindow:
         x, y = area["left"], area["top"] + area["height"] + 15
         self.window.geometry(f"{area['width']}x80+{x}+{y}")
         
-        self.label = tk.Label(self.window, text="Sistem Hazır...", fg="#00FF00", bg="#121212", 
+        self.label = tk.Label(self.window, text="Sistem Analiz Ediyor...", fg="#00FF00", bg="#121212", 
                               font=("Verdana", 11, "bold"), wraplength=area["width"]-20)
         self.label.pack(fill="both", expand=True)
+        self.label.bind("<Button-1>", self.start_drag)
+        self.label.bind("<B1-Motion>", self.do_drag)
+
+    def start_drag(self, event):
+        self.x, self.y = event.x, event.y
+
+    def do_drag(self, event):
+        dx, dy = event.x - self.x, event.y - self.y
+        self.window.geometry(f"+{self.window.winfo_x() + dx}+{self.window.winfo_y() + dy}")
 
     def update_text(self, text):
         if self.window.winfo_exists():
@@ -82,35 +93,31 @@ class OverlayWindow:
 class MainApp:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("Noblewolf Translator")
+        self.root.title("Noblewolf Translator Pro")
         self.root.geometry("300x400")
         self.root.configure(bg="#1c1c1c")
-        
         self.translator = Translator()
         self.is_running = False
         self.area = None
         self.overlay = None
         self.buffer = ""
         self.next_update_time = 0
-        
         self.setup_ui()
 
     def setup_ui(self):
         tk.Label(self.root, text="KONTROL PANELİ", fg="#00FF00", bg="#1c1c1c", font=("Verdana", 12, "bold")).pack(pady=20)
         tk.Button(self.root, text="1. ALAN SEÇ", command=self.select_area, bg="#333", fg="white", width=20).pack(pady=10)
-        
         self.mode_var = tk.StringVar(value="1")
-        tk.Radiobutton(self.root, text="Basit Mod", variable=self.mode_var, value="1", bg="#1c1c1c", fg="white", selectcolor="#444").pack()
-        tk.Radiobutton(self.root, text="Gelişmiş Mod", variable=self.mode_var, value="2", bg="#1c1c1c", fg="white", selectcolor="#444").pack()
-
+        tk.Radiobutton(self.root, text="Hızlı Mod (Kelime)", variable=self.mode_var, value="1", bg="#1c1c1c", fg="white", selectcolor="#444").pack()
+        tk.Radiobutton(self.root, text="Film Modu (Cümle)", variable=self.mode_var, value="2", bg="#1c1c1c", fg="white", selectcolor="#444").pack()
         self.btn_toggle = tk.Button(self.root, text="BAŞLAT", command=self.toggle, bg="#008800", fg="white", font=("bold"), width=15)
         self.btn_toggle.pack(pady=30)
 
-    # --- BURASI EKSİKTİ ---
     def run(self):
         self.root.mainloop()
 
     def select_area(self):
+        if self.is_running: self.toggle(); time.sleep(0.5)
         self.root.withdraw()
         time.sleep(0.3)
         selector = AreaSelector(self.root)
@@ -123,72 +130,78 @@ class MainApp:
             self.is_running = True
             self.overlay = OverlayWindow(self.root, self.area)
             self.btn_toggle.config(text="DURDUR", bg="#880000")
-            
             target = self.simple_loop if self.mode_var.get() == "1" else self.advanced_loop
             threading.Thread(target=target, daemon=True).start()
         else:
             self.is_running = False
             if self.overlay:
-                temp_overlay = self.overlay
-                self.overlay = None
-                temp_overlay.destroy()
+                temp = self.overlay; self.overlay = None; temp.destroy()
             self.btn_toggle.config(text="BAŞLAT", bg="#008800")
+
+    def clean_text(self, text):
+        # OCR çöplerini temizle: Sadece harf, rakam ve temel noktalama
+        cleaned = re.sub(r'[^a-zA-Z0-9\s.,!?\'"-]', '', text)
+        # Gereksiz boşlukları at
+        return " ".join(cleaned.split()).strip()
 
     def simple_loop(self):
         last_text = ""
         with mss.mss() as sct:
             while self.is_running:
                 try:
-                    sct_img = sct.grab(self.area)
-                    img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
-                    raw_text = pytesseract.image_to_string(img).strip()
+                    img = Image.frombytes("RGB", sct.grab(self.area).size, sct.grab(self.area).bgra, "raw", "BGRX")
+                    raw = pytesseract.image_to_string(img)
+                    clean = self.clean_text(raw)
                     
-                    if raw_text and raw_text != last_text and len(raw_text) > 2:
-                        clean = " ".join(raw_text.split())
+                    if len(clean) > 3 and clean != last_text:
                         tr = self.translator.translate(clean, dest='tr')
-                        print(f"[OKUNAN]: {clean} -> [TR]: {tr.text}")
+                        print(f"[OCR]: {clean} -> [TR]: {tr.text}")
                         if self.is_running and self.overlay:
                             self.root.after(0, self.overlay.update_text, tr.text)
-                        last_text = raw_text
-                    time.sleep(0.5)
+                        last_text = clean
+                    time.sleep(0.7)
                 except: break
 
     def advanced_loop(self):
         def preprocess(pil_img):
             img = ImageOps.grayscale(pil_img)
-            img = img.point(lambda p: 255 if p > 160 else 0)
+            # Threshold 190 yaparak beyaz yazıların etrafındaki gürültüyü siliyoruz
+            img = img.point(lambda p: 255 if p > 190 else 0)
             return img
         
         last_raw_text = ""
         with mss.mss() as sct:
             while self.is_running:
                 try:
-                    sct_img = sct.grab(self.area)
-                    raw_img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
+                    raw_img = Image.frombytes("RGB", sct.grab(self.area).size, sct.grab(self.area).bgra, "raw", "BGRX")
                     processed = preprocess(raw_img)
-                    current_raw = " ".join(re.sub(r'[^a-zA-Z0-9\s.,!?\'"-]', '', pytesseract.image_to_string(processed, config='--psm 6')).split())
+                    current_raw = self.clean_text(pytesseract.image_to_string(processed, config='--psm 6'))
                     
-                    if len(current_raw) > 2 and current_raw != last_raw_text:
+                    # Eğer okunan metin çok kısa veya anlamsız bir değişimse es geç
+                    if len(current_raw) > 3 and current_raw != last_raw_text:
+                        # Benzerlik kontrolü: Eğer öncekiyle %80 aynıysa yeni çeviriye gerek yok
+                        similarity = difflib.SequenceMatcher(None, last_raw_text, current_raw).ratio()
+                        if similarity > 0.85:
+                            time.sleep(0.2)
+                            continue
+
                         last_raw_text = current_raw
                         s = difflib.SequenceMatcher(None, self.buffer, current_raw)
                         match = s.find_longest_match(0, len(self.buffer), 0, len(current_raw))
+                        
                         if match.size > 3: self.buffer += current_raw[match.b + match.size:]
                         else: self.buffer += " " + current_raw
 
                         sentences = re.findall(r'([^.!?]+[.!?])', self.buffer)
                         if sentences:
-                            is_lagging = len(sentences) > 2
-                            to_translate = " ".join(sentences[-2:]).strip() if is_lagging else sentences[0].strip()
-                            if time.time() >= self.next_update_time or is_lagging:
+                            to_translate = sentences[0].strip()
+                            if len(to_translate) > 5:
                                 tr = self.translator.translate(to_translate, dest='tr')
                                 if self.is_running and self.overlay:
                                     self.root.after(0, self.overlay.update_text, tr.text)
-                                self.next_update_time = time.time() + (0.6 if is_lagging else 2.0)
-                                if is_lagging: self.buffer = ""
-                                else:
-                                    m = re.search(re.escape(to_translate), self.buffer)
-                                    if m: self.buffer = self.buffer[m.end():].strip()
-                    time.sleep(0.1)
+                                # Buffer temizliği
+                                self.buffer = self.buffer.replace(to_translate, "").strip()
+                    time.sleep(0.2)
                 except: break
 
 if __name__ == "__main__":
