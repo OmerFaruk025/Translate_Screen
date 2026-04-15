@@ -1,3 +1,5 @@
+#BİSMİLLAH,NOW ONLY GOD KNOW WHAT I WROTE
+
 import mss
 import easyocr
 import numpy as np
@@ -135,7 +137,6 @@ class MainApp:
                     results = self.reader.readtext(np.array(sct.grab(self.area)))
                     current_text = self.clean_text(" ".join([res[1] for res in results if res[2] > 0.4]))
                     if len(current_text) > 2 and current_text != last_text:
-                        # Çeviriyi arka planda yap ki döngü takılmasın
                         threading.Thread(target=self._async_translate, args=(current_text,), daemon=True).start()
                         last_text = current_text
                     time.sleep(0.3)
