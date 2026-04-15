@@ -77,7 +77,7 @@ class OverlayWindow:
 class MainApp:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("Omer Faruk AI Translator")
+        self.root.title("Omer Faruk AI Translator - No-Lag Edition")
         self.root.geometry("300x450")
         self.root.configure(bg="#1c1c1c")
         
@@ -94,9 +94,9 @@ class MainApp:
     def setup_ui(self):
         tk.Label(self.root, text="KONTROL PANELİ", fg="#00FF00", bg="#1c1c1c", font=("Verdana", 12, "bold")).pack(pady=20)
         tk.Button(self.root, text="ALAN SEÇ", command=self.select_area, bg="#333", fg="white", width=20).pack(pady=10)
-        self.mode_var = tk.StringVar(value="2") # Varsayılan Film Modu
+        self.mode_var = tk.StringVar(value="2")
         tk.Radiobutton(self.root, text="Hızlı Mod (Anlık)", variable=self.mode_var, value="1", bg="#1c1c1c", fg="white", selectcolor="#444").pack()
-        tk.Radiobutton(self.root, text="Film Modu (Turbo)", variable=self.mode_var, value="2", bg="#1c1c1c", fg="white", selectcolor="#444").pack()
+        tk.Radiobutton(self.root, text="Film Modu (Real-Time)", variable=self.mode_var, value="2", bg="#1c1c1c", fg="white", selectcolor="#444").pack()
         self.btn_toggle = tk.Button(self.root, text="BAŞLAT", command=self.toggle, bg="#008800", fg="white", font="bold", width=15)
         self.btn_toggle.pack(pady=30)
 
@@ -135,13 +135,20 @@ class MainApp:
                     results = self.reader.readtext(np.array(sct.grab(self.area)))
                     current_text = self.clean_text(" ".join([res[1] for res in results if res[2] > 0.4]))
                     if len(current_text) > 2 and current_text != last_text:
-                        tr = self.translator.translate(current_text, dest='tr')
-                        if self.is_running and self.overlay:
-                            self.root.after(0, self.overlay.update_text, tr.text)
+                        # Çeviriyi arka planda yap ki döngü takılmasın
+                        threading.Thread(target=self._async_translate, args=(current_text,), daemon=True).start()
                         last_text = current_text
-                    time.sleep(0.4)
+                    time.sleep(0.3)
                 except: break
 
+    def _async_translate(self, text):
+        try:
+            tr = self.translator.translate(text, dest='tr')
+            if self.is_running and self.overlay:
+                self.root.after(0, self.overlay.update_text, tr.text)
+        except: pass
+
+    # --- MOD 2: AGRESİF YAKALAYICI ---
     def capture_loop(self):
         last_raw_text = ""
         buffer = ""
@@ -152,8 +159,10 @@ class MainApp:
                     current_raw = self.clean_text(" ".join([res[1] for res in results if res[2] > 0.45]))
                     
                     if len(current_raw) > 3 and current_raw != last_raw_text:
-                        if difflib.SequenceMatcher(None, last_raw_text, current_raw).ratio() > 0.85:
+                        # Değişim çok azsa (parazitse) atla
+                        if difflib.SequenceMatcher(None, last_raw_text, current_raw).ratio() > 0.92:
                             continue
+                        
                         last_raw_text = current_raw
                         s = difflib.SequenceMatcher(None, buffer, current_raw)
                         match = s.find_longest_match(0, len(buffer), 0, len(current_raw))
@@ -161,15 +170,20 @@ class MainApp:
                         if match.size > 3: buffer += current_raw[match.b + match.size:]
                         else: buffer += " " + current_raw
 
+                        # Cümle sonu beklemeden, buffer çok şişerse veya nokta gelirse kuyruğa at
                         sentences = re.findall(r'([^.!?]+[.!?])', buffer)
                         if sentences:
                             for s_text in sentences:
                                 self.queue.put(s_text.strip()) 
                                 buffer = buffer.replace(s_text, "").strip()
-                    time.sleep(0.2)
+                        elif len(buffer.split()) > 12: # Cümle bitmese bile 12 kelime olduysa çevir
+                            self.queue.put(buffer.strip())
+                            buffer = ""
+                    
+                    time.sleep(0.15) # Yakalama hızını artırdık
                 except: break
 
-    # --- MOD 2: GÖSTERİCİ (ASLA SİLMEZ, GEREKİRSE TURBOYA GEÇER) ---
+    # --- MOD 2: GÖSTERİCİ (LAG-OFF SİSTEMİ) ---
     def display_worker(self):
         while self.is_running:
             if not self.queue.empty():
@@ -177,32 +191,32 @@ class MainApp:
                 to_translate = self.queue.get()
                 
                 try:
+                    # Çeviri süresini ölçmek yerine direkt çeviriyoruz
                     tr = self.translator.translate(to_translate, dest='tr')
                     if self.is_running and self.overlay:
                         self.root.after(0, self.overlay.update_text, tr.text)
                     
-                    # Normal Bekleme Süresi (1.5x ayarın)
+                    # Dinamik Bekleme
                     word_count = len(to_translate.split())
-                    wait_duration = 0.7 + (word_count * 0.25)
+                    # Katsayıları daha da kıstık
+                    wait_duration = 0.5 + (word_count * 0.2)
                     
-                    # --- TURBO MODU: Eğer kuyruk birikmişse gaza bas ---
-                    if q_size > 1:
-                        # Kuyrukta ne kadar çok cümle varsa o kadar hızlan
-                        # 0.3 alt limit olsun ki en azından bir anlık görünsün
-                        speed_factor = max(0.2, 1.0 - (q_size * 0.15))
-                        wait_duration *= speed_factor
-                        print(f"[TURBO] Kuyruk: {q_size} | Bekleme: {wait_duration:.2f}s")
+                    # --- ASLA 2 CÜMLE GERİDE KALMA KURALI ---
+                    # Eğer biz çeviriyi ekrana basana kadar arkada yeni cümle birikmişse (q_size > 0)
+                    # Bekleme süresini NÖTRLE. Direkt bir sonrakine geç.
+                    if self.queue.qsize() > 0:
+                        wait_duration = 0.1 # Neredeyse anında geçiş
+                        print(f"[LAG-OFF] Yeni cümle tespit edildi, bekleme iptal.")
                     
-                    # Bekleme yaparken thread durdurulabilir olsun
                     start_time = time.time()
                     while time.time() - start_time < wait_duration:
-                        if not self.is_running: break
-                        time.sleep(0.05)
+                        if not self.is_running or self.queue.qsize() > 0: # Beklerken yeni cümle gelirse fırlat
+                            break
+                        time.sleep(0.02)
                         
-                except Exception as e:
-                    print(f"Display Error: {e}")
+                except: pass
             else:
-                time.sleep(0.1)
+                time.sleep(0.05)
 
     def run(self): self.root.mainloop()
 
