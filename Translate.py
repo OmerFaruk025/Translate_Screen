@@ -10,7 +10,7 @@ import re
 import difflib
 from queue import Queue
 
-# --- 1. AREA SELECTOR --- (Değişmedi)
+# --- 1. AREA SELECTOR ---
 class AreaSelector:
     def __init__(self, master):
         self.top = tk.Toplevel(master)
@@ -52,7 +52,7 @@ class AreaSelector:
         self.top.wait_window()
         return self.selection
 
-# --- 2. OVERLAY WINDOW --- (Değişmedi)
+# --- 2. OVERLAY WINDOW ---
 class OverlayWindow:
     def __init__(self, master, area):
         self.window = tk.Toplevel(master)
@@ -77,7 +77,7 @@ class OverlayWindow:
 class MainApp:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("Absolute Translater")
+        self.root.title("Omer Faruk AI Translator")
         self.root.geometry("300x450")
         self.root.configure(bg="#1c1c1c")
         
@@ -88,15 +88,15 @@ class MainApp:
         self.is_running = False
         self.area = None
         self.overlay = None
-        self.queue = Queue() # Çeviri kuyruğu
+        self.queue = Queue() 
         self.setup_ui()
 
     def setup_ui(self):
-        tk.Label(self.root, text="Kontrol Paneli", fg="#00FF00", bg="#1c1c1c", font=("Verdana", 12, "bold")).pack(pady=20)
+        tk.Label(self.root, text="KONTROL PANELİ", fg="#00FF00", bg="#1c1c1c", font=("Verdana", 12, "bold")).pack(pady=20)
         tk.Button(self.root, text="ALAN SEÇ", command=self.select_area, bg="#333", fg="white", width=20).pack(pady=10)
-        self.mode_var = tk.StringVar(value="1")
+        self.mode_var = tk.StringVar(value="2") # Varsayılan Film Modu
         tk.Radiobutton(self.root, text="Hızlı Mod (Anlık)", variable=self.mode_var, value="1", bg="#1c1c1c", fg="white", selectcolor="#444").pack()
-        tk.Radiobutton(self.root, text="Film Modu (Akıllı)", variable=self.mode_var, value="2", bg="#1c1c1c", fg="white", selectcolor="#444").pack()
+        tk.Radiobutton(self.root, text="Film Modu (Turbo)", variable=self.mode_var, value="2", bg="#1c1c1c", fg="white", selectcolor="#444").pack()
         self.btn_toggle = tk.Button(self.root, text="BAŞLAT", command=self.toggle, bg="#008800", fg="white", font="bold", width=15)
         self.btn_toggle.pack(pady=30)
 
@@ -113,8 +113,6 @@ class MainApp:
             self.is_running = True
             self.overlay = OverlayWindow(self.root, self.area)
             self.btn_toggle.config(text="DURDUR", bg="#880000")
-            
-            # İki thread başlatıyoruz
             if self.mode_var.get() == "1":
                 threading.Thread(target=self.simple_loop, daemon=True).start()
             else:
@@ -122,14 +120,13 @@ class MainApp:
                 threading.Thread(target=self.display_worker, daemon=True).start()
         else:
             self.is_running = False
-            with self.queue.mutex: self.queue.queue.clear() # Kuyruğu temizle
+            with self.queue.mutex: self.queue.queue.clear() 
             if self.overlay: self.overlay.window.destroy(); self.overlay = None
             self.btn_toggle.config(text="BAŞLAT", bg="#008800")
 
     def clean_text(self, text):
         return " ".join(re.sub(r'[^a-zA-Z0-9\s.,!?\']', '', text).split()).strip()
 
-    # --- MOD 1: HIZLI MOD ---
     def simple_loop(self):
         last_text = ""
         with mss.mss() as sct:
@@ -145,7 +142,6 @@ class MainApp:
                     time.sleep(0.4)
                 except: break
 
-    # --- MOD 2: YAKALAYICI (HİÇ BEKLEMEZ) ---
     def capture_loop(self):
         last_raw_text = ""
         buffer = ""
@@ -158,7 +154,6 @@ class MainApp:
                     if len(current_raw) > 3 and current_raw != last_raw_text:
                         if difflib.SequenceMatcher(None, last_raw_text, current_raw).ratio() > 0.85:
                             continue
-                        
                         last_raw_text = current_raw
                         s = difflib.SequenceMatcher(None, buffer, current_raw)
                         match = s.find_longest_match(0, len(buffer), 0, len(current_raw))
@@ -169,35 +164,43 @@ class MainApp:
                         sentences = re.findall(r'([^.!?]+[.!?])', buffer)
                         if sentences:
                             for s_text in sentences:
-                                self.queue.put(s_text.strip()) # Kuyruğa at
+                                self.queue.put(s_text.strip()) 
                                 buffer = buffer.replace(s_text, "").strip()
-                    
                     time.sleep(0.2)
                 except: break
 
-    # --- MOD 2: GÖSTERİCİ (ZAMANLAMAYI YÖNETİR) ---
+    # --- MOD 2: GÖSTERİCİ (ASLA SİLMEZ, GEREKİRSE TURBOYA GEÇER) ---
     def display_worker(self):
         while self.is_running:
             if not self.queue.empty():
-                # Eğer kuyruk çok şişmişse (3'ten fazla cümle varsa), eskilere atla
-                if self.queue.qsize() > 3:
-                    print(f"[UYARI] Gecikme tespit edildi, {self.queue.qsize()-1} cümle atlanıyor...")
-                    while self.queue.qsize() > 1:
-                        self.queue.get()
-
+                q_size = self.queue.qsize()
                 to_translate = self.queue.get()
+                
                 try:
                     tr = self.translator.translate(to_translate, dest='tr')
                     if self.is_running and self.overlay:
                         self.root.after(0, self.overlay.update_text, tr.text)
                     
-                    # Dinamik Bekleme (1.5x Hızda)
+                    # Normal Bekleme Süresi (1.5x ayarın)
                     word_count = len(to_translate.split())
-                    wait_duration = 0.6 + (word_count * 0.22)
-                    wait_duration = min(wait_duration, 4.0) # Maks 4 sn
+                    wait_duration = 0.7 + (word_count * 0.25)
                     
-                    time.sleep(wait_duration)
-                except: pass
+                    # --- TURBO MODU: Eğer kuyruk birikmişse gaza bas ---
+                    if q_size > 1:
+                        # Kuyrukta ne kadar çok cümle varsa o kadar hızlan
+                        # 0.3 alt limit olsun ki en azından bir anlık görünsün
+                        speed_factor = max(0.2, 1.0 - (q_size * 0.15))
+                        wait_duration *= speed_factor
+                        print(f"[TURBO] Kuyruk: {q_size} | Bekleme: {wait_duration:.2f}s")
+                    
+                    # Bekleme yaparken thread durdurulabilir olsun
+                    start_time = time.time()
+                    while time.time() - start_time < wait_duration:
+                        if not self.is_running: break
+                        time.sleep(0.05)
+                        
+                except Exception as e:
+                    print(f"Display Error: {e}")
             else:
                 time.sleep(0.1)
 
