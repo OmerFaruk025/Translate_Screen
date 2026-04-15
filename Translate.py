@@ -7,6 +7,8 @@ import time
 import re
 import difflib
 
+# --- GENEL YARDIMCI SINIFLAR ---
+
 class AreaSelector:
     def __init__(self):
         self.root = tk.Tk()
@@ -58,6 +60,8 @@ class OverlayWindow:
         self.label.config(text=text)
         self.root.update()
 
+# --- ANA MOTOR ---
+
 class ScreenTranslator:
     def __init__(self):
         self.mss_instance = mss.mss()
@@ -65,100 +69,106 @@ class ScreenTranslator:
         self.buffer = ""
         self.next_update_time = 0
 
-    def preprocess_image(self, pil_img):
-        """Görüntüyü OCR için cam gibi yapar."""
-        img = ImageOps.grayscale(pil_img) # Griye çevir
-        img = ImageOps.autocontrast(img)  # Kontrastı patlat
-        # Threshold: 160 değerinin altını siyah, üstünü beyaz yap (Net harfler)
-        img = img.point(lambda p: 255 if p > 160 else 0)
-        img = img.filter(ImageFilter.SHARPEN) # Keskinleştir
-        return img
-
-    def clean_text(self, text):
-        """Garip karakterleri ( { [ | _ ) temizler."""
-        cleaned = re.sub(r'[^a-zA-Z0-9\s.,!?\'"-]', '', text)
-        return " ".join(cleaned.split())
-
-    def calculate_display_time(self, text, is_lagging=False):
-        if is_lagging: return 0.6
-        return min(max(1.2 + (len(text) * 0.04), 1.5), 4.5)
-
-    def find_overlap_and_stitch(self, new_text):
-        if not self.buffer: return new_text
-        s = difflib.SequenceMatcher(None, self.buffer, new_text)
-        match = s.find_longest_match(0, len(self.buffer), 0, len(new_text))
-        if match.size > 3:
-            return self.buffer + new_text[match.b + match.size:]
-        return self.buffer + " " + new_text
-
     def run(self):
-        print("\n--- Ömer'in Akıllı Çeviri v2.6 (Kristal Mod) ---")
-        print("1 - Normal Ekran Çevirisi")
-        print("2 - YouTube Kusursuz Hafıza & Senkron Modu")
-        secim = input("Seçim: ")
-        selector = AreaSelector(); area = selector.get_selection()
+        print("\n--- ÇEVİRİ KONSOLU v4.5 ---")
+        print("1 - BASİT MOD (Favori - Stabil)")
+        print("2 - GELİŞMİŞ MOD (Agresif - Senkronize)")
+        secim = input("Mod seç kanka (1/2): ")
+
+        selector = AreaSelector()
+        area = selector.get_selection()
         if not area or area["width"] < 10: return
-        if secim == "1": self.normal_mode(area, selector.bg_img)
-        else: self.live_mode(area)
 
-    def normal_mode(self, area, full_img):
-        img = full_img.crop((area["left"], area["top"], area["left"] + area["width"], area["top"] + area["height"]))
-        text = self.clean_text(pytesseract.image_to_string(img))
-        if text:
-            tr = self.translator.translate(text, dest='tr')
-            print(f"\n[TR]: {tr.text}")
+        if secim == "1":
+            self.simple_mode(area)
+        else:
+            self.advanced_mode(area)
 
-    def live_mode(self, area):
+    def simple_mode(self, area):
+        """Senin dokunulmasını istemediğin o saf ve güzel versiyon"""
+        overlay = OverlayWindow(area)
+        last_text = ""
+        print("Basit Mod Aktif...")
+        try:
+            while True:
+                sct_img = self.mss_instance.grab(area)
+                img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
+                raw_text = pytesseract.image_to_string(img).strip()
+                
+                if raw_text and raw_text != last_text:
+                    try:
+                        clean_text = " ".join(raw_text.split())
+                        tr = self.translator.translate(clean_text, dest='tr')
+                        overlay.update_text(tr.text)
+                        last_text = raw_text
+                    except Exception as e:
+                        print(f"Hata: {e}")
+                
+                overlay.root.update()
+                time.sleep(0.5)
+        except: print("Basit Mod Durdu.")
+
+    def advanced_mode(self, area):
+        """Turbo senkronizasyon ve görüntü işleme içeren agresif mod"""
         overlay = OverlayWindow(area)
         last_raw_text = ""
+        print("Gelişmiş Mod Aktif (Turbo + Filtre)...")
         
-        print("Kusursuz Senkronizasyon Aktif. (Ctrl+C ile durdurun)")
+        def preprocess(pil_img):
+            img = ImageOps.grayscale(pil_img)
+            img = img.point(lambda p: 255 if p > 160 else 0) # Sert kontrast
+            return img
+
+        def clean_junk(text):
+            return " ".join(re.sub(r'[^a-zA-Z0-9\s.,!?\'"-]', '', text).split())
+
         try:
             while True:
                 sct_img = self.mss_instance.grab(area)
                 raw_img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
                 
-                # ÖNCE TEMİZLE, SONRA OKU
-                processed_img = self.preprocess_image(raw_img)
-                current_raw = self.clean_text(pytesseract.image_to_string(processed_img, config='--psm 6'))
+                # Gelişmiş Filtreleme
+                processed = preprocess(raw_img)
+                current_raw = clean_junk(pytesseract.image_to_string(processed, config='--psm 6'))
                 
-                if len(current_raw) < 3: # Çöp metinleri atla
+                if len(current_raw) < 3:
                     overlay.root.update(); time.sleep(0.1); continue
 
                 if current_raw and current_raw != last_raw_text:
                     last_raw_text = current_raw
-                    self.buffer = self.find_overlap_and_stitch(current_raw)
+                    
+                    # Kelime dikme (Overlap Check)
+                    s = difflib.SequenceMatcher(None, self.buffer, current_raw)
+                    match = s.find_longest_match(0, len(self.buffer), 0, len(current_raw))
+                    if match.size > 3:
+                        self.buffer += current_raw[match.b + match.size:]
+                    else:
+                        self.buffer += " " + current_raw
+
                     sentences = re.findall(r'([^.!?]+[.!?])', self.buffer)
                     
                     if sentences:
-                        num_sentences = len(sentences)
-                        is_lagging = num_sentences > 2
-                        
-                        # --- AGRESİF SENKRONİZASYON ---
-                        if is_lagging:
-                            # Çok geriysek son iki cümleyi birleştir, eskileri çöpe at
-                            to_translate = " ".join(sentences[-2:]).strip()
-                            self.buffer = "" # Arkayı temizle ki yetişelim
-                        else:
-                            to_translate = sentences[0].strip()
+                        is_lagging = len(sentences) > 2
+                        # Lag varsa son iki cümleyi birleştir, yoksa ilkini al
+                        to_translate = " ".join(sentences[-2:]).strip() if is_lagging else sentences[0].strip()
 
                         if time.time() >= self.next_update_time or is_lagging:
                             try:
                                 tr = self.translator.translate(to_translate, dest='tr')
                                 overlay.update_text(tr.text)
+                                # Lag varsa bekleme süresini daralt
+                                self.next_update_time = time.time() + (0.6 if is_lagging else 2.0)
                                 
-                                # Bekleme süresini ayarla
-                                self.next_update_time = time.time() + self.calculate_display_time(tr.text, is_lagging)
-                                
-                                if not is_lagging:
+                                if is_lagging:
+                                    self.buffer = "" 
+                                else:
                                     match = re.search(re.escape(to_translate), self.buffer)
                                     if match: self.buffer = self.buffer[match.end():].strip()
                             except: pass
                 
                 overlay.root.update()
-                time.sleep(0.1) # Maksimum tarama hızı
-        except:
-            print("Kapatıldı.")
+                time.sleep(0.1) # Agresif tarama hızı
+        except: print("Gelişmiş Mod Durdu.")
 
 if __name__ == "__main__":
     app = ScreenTranslator()
