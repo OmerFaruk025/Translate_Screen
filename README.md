@@ -1,140 +1,130 @@
-# 🎥 Active Translation Assistant
-This project is a Python-based helper tool that captures text from a selected area on the screen (especially YouTube subtitles, in-game texts, or technical documents) in real time and translates it into Turkish.
+# AI Real-Time Translator
 
-## ​🤌🏼 Key Features
+![Python](https://img.shields.io/badge/Python-3.8+-blue?style=for-the-badge&logo=python)
+![EasyOCR](https://img.shields.io/badge/AI-EasyOCR-green?style=for-the-badge)
+![CUDA](https://img.shields.io/badge/NVIDIA-CUDA%20Supported-orange?style=for-the-badge&logo=nvidia)
+![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)
 
-The project offers the user two different usage experiences:
+This project is a high-performance desktop tool that captures English text from a selected area on the screen (games, movies, videos, etc.) in real-time and translates it into Turkish using Deep Learning.
 
-* **Simple Mode (Stable):** A pure and reliable mode that avoids unnecessary processing load and directly translates the text it sees on the screen.
-* **Advanced Mode:** An experimental mode that prevents delay (Lag Control) in fast-flowing videos, removes noise with image processing filters, and tries to preserve sentence integrity.
+It is developed with a zero-latency goal using GPU support.
+
+## 🚀 Key Features
+
+* **EasyOCR Engine:** Unlike traditional OCR methods, it provides much more accurate character recognition using deep learning-based artificial intelligence.
+* **Real-Time "Lag Saver" System:** Runs image capture and translation processes asynchronously (in separate channels) to avoid falling behind the video.
+* **Turbo Film Mode:** A dynamic timing mechanism that quickly processes accumulated sentences to keep up with the screen flow.
+* **Flexible Area Selection:** Select any part of the screen and let the AI handle the rest.
+* **NVIDIA GPU Support:** Uses CUDA cores to run extremely fast without putting load on the CPU.
 
 ## 🛠️ Installation
 
-Python must be installed on your system for the project to run.
-
-1.  **Install Required Libraries:**
+1.  **Clone the repository:**
     ```bash
-    pip install mss pytesseract Pillow googletrans==4.0.0-rc1
+    git clone https://github.com/OmerFaruk025/Translate_Screen.git
+    cd Translate_Screen
     ```
 
-2.  **Install Tesseract OCR:**
-    * Make sure the Tesseract engine is installed on your system.
-    * [Tesseract OCR Download Page](https://github.com/UB-Mannheim/tesseract/wiki)
-    * *Note: If you are using Windows, do not forget to add the Tesseract path to the system variables (PATH).*
+2.  **Create and activate a virtual environment (venv):**
+    ```bash
+    python -m venv venv
+    
+    # For Windows:
+    venv\Scripts\activate
+    # For Linux:
+    source venv/bin/activate
+    ```
 
-## 💻 Usage
+3.  **Install required dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-1.  Start the application with the command `python Translate.py`.
-2.  Choose your mode on the screen that appears:
-    * `1`: A calm and stable translation experience.
-    * `2`: For fast-flowing videos and noisy (complex) backgrounds.
-3.  Select the area you want to translate on the screen by dragging with your mouse.
-4.  A transparent translation panel will open right below the selected area.
-5.  **Exit:** You can terminate the process by pressing `Ctrl+C` in the terminal or pressing the `ESC` key while selecting the area.
+## 🎮 Usage
 
-## ⚙️ Technical Details
+1.  Start the application: `python Translate.py`
+2.  Click the **SELECT AREA** button and mark the region on the screen you want to translate (such as subtitles).
+3.  Choose your mode:
+    * **Fast Mode:** Instant translation for short texts and menus.
+    * **Film Mode:** Smart tracking for long dialogues and flowing videos.
+4.  Press the **START** button and enjoy!
 
-* **Screen Capture:** Taking screenshots with the `mss` library.
-* **Text Recognition:** `pytesseract` (Google Tesseract OCR) engine.
-* **Translation Engine:** `googletrans` API.
-* **Interface:** Lightweight and transparent layer (Overlay) with `tkinter`.
-* **Image Processing:** Increasing contrast and noise filtering using `Pillow` in advanced mode.
+## 📦 Requirements
 
-## ⚠️ Tip
-For the best results, I recommend using **"Background Opacity: 100%"** and **"Edge Style: None"** options in YouTube subtitle settings. This way, the OCR engine will read the letters much more clearly.
+* Python 3.8+
+* NVIDIA GPU (recommended for CUDA support)
+* Active internet connection (for Google Translate API)
+
+---
+## Developed by **[Omer Faruk](https://github.com/OmerFaruk025)**
+
+
+
+
+
 
 ---
 
 
-# 🎥 Aktif Çeviri Asistanı
-Bu proje, ekranda seçilen bir alandaki (özellikle YouTube altyazıları, oyun içi metinler veya teknik dökümanlar) metinleri anlık olarak yakalayıp Türkçeye çeviren, Python tabanlı bir yardımcı araçtır.
 
 
 
-## ​🤌🏼 Öne Çıkan Özellikler
 
 
+# AI Real-Time Translator
 
-Proje, kullanıcıya iki farklı kullanım deneyimi sunar:
+![Python](https://img.shields.io/badge/Python-3.8+-blue?style=for-the-badge&logo=python)
+![EasyOCR](https://img.shields.io/badge/AI-EasyOCR-green?style=for-the-badge)
+![CUDA](https://img.shields.io/badge/NVIDIA-CUDA%20Supported-orange?style=for-the-badge&logo=nvidia)
+![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)
 
+Bu proje, ekranda seçilen belirli bir alandaki İngilizce metinleri (oyun, film, video vb.) gerçek zamanlı olarak yakalayan ve Deep Learning (Derin Öğrenme) kullanarak Türkçe'ye çeviren yüksek performanslı bir masaüstü aracıdır. GPU desteğiyle sıfır gecikme hedeflenerek geliştirilmiştir.
 
+## 🚀 Öne Çıkan Özellikler
 
-* **Basit Mod (Stabil):** Gereksiz işlem yükünden kaçınan, ekranda gördüğü metni doğrudan çeviren saf ve güvenilir mod.
-
-* **Gelişmiş Mod:** Hızlı akan videolarda gecikmeyi önleyen (Lag Control), görüntü işleme filtreleri ile gürültüyü silen ve cümle bütünlüğünü korumaya çalışan deneysel mod.
-
-
+* **EasyOCR Motoru:** Geleneksel OCR yöntemlerinden farklı olarak, derin öğrenme tabanlı yapay zeka ile çok daha isabetli karakter tanıma.
+* **Real-Time "Lag-Savar" Sistemi:** Görüntü yakalama ve çeviri işlemlerini asenkron (ayrı kanallarda) yürüterek videonun gerisinde kalmaz.
+* **Turbo Film Modu:** Biriken cümleleri hızla eriterek ekran akışını yakalayan dinamik zamanlama mekanizması.
+* **Esnek Alan Seçimi:** Ekranın istediğiniz kısmını seçin, gerisini AI halletsin.
+* **NVIDIA GPU Desteği:** CUDA çekirdeklerini kullanarak CPU'yu yormadan mermi gibi çalışır.
 
 ## 🛠️ Kurulum
 
-
-
-Projenin çalışması için sisteminizde Python yüklü olmalıdır.
-
-
-
-1.  **Gerekli Kütüphaneleri Yükleyin:**
-
+1.  **Depoyu klonlayın:**
     ```bash
-
-    pip install mss pytesseract Pillow googletrans==4.0.0-rc1
-
+    git clone https://github.com/OmerFaruk025/Translate_Screen.git
+    cd Translate_Screen
     ```
 
+2.  **Sanal ortam (venv) oluşturun ve aktif edin:**
+    ```bash
+    python -m venv venv
+    
+    # Windows için:
+    venv\Scripts\activate
+    # Linux için:
+    source venv/bin/activate
+    ```
 
+3.  **Gerekli kütüphaneleri kurun:**
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-2.  **Tesseract OCR Yükleyin:**
+## 🎮 Kullanım
 
-    * Sisteminizde Tesseract motorunun yüklü olduğundan emin olun.
+1.  Uygulamayı başlatın: `python Translate.py`
+2.  **ALAN SEÇ** butonuna tıklayarak ekranda çevrilmesini istediğiniz bölgeyi (altyazı alanı gibi) işaretleyin.
+3.  Modunuzu seçin:
+    * **Hızlı Mod:** Kısa metinler ve menüler için anlık çeviri.
+    * **Film Modu:** Uzun diyaloglar ve akıcı videolar için akıllı takip.
+4.  **BAŞLAT** butonuna basın ve keyfinize bakın!
 
-    * [Tesseract OCR İndirme Sayfası](https://github.com/UB-Mannheim/tesseract/wiki)
+## 📦 Gereksinimler
 
-    * *Not: Windows kullanıyorsanız Tesseract yolunu sistem değişkenlerine (PATH) eklemeyi unutmayın.*
-
-
-
-## 💻 Kullanım
-
-
-
-1.  `python Translate.py` komutuyla uygulamayı başlatın.
-
-2.  Gelen ekranda mod seçiminizi yapın:
-
-    * `1`: Sakin ve stabil bir çeviri deneyimi.
-
-    * `2`: Hızlı akan videolar ve gürültülü (karmaşık) arka planlar için.
-
-3.  Ekranda çevrilmesini istediğiniz alanı farenizle sürükleyerek seçin.
-
-4.  Seçilen alanın hemen altında şeffaf bir çeviri paneli açılacaktır.
-
-5.  **Çıkış:** Terminalde `Ctrl+C` yaparak veya alanı seçerken `ESC` tuşuna basarak işlemi sonlandırabilirsiniz.
-
-
-
-## ⚙️ Teknik Detaylar
-
-
-
-* **Ekran Yakalama:** `mss` kütüphanesi ile ekran görüntüsü alma.
-
-* **Metin Tanıma:** `pytesseract` (Google Tesseract OCR) motoru.
-
-* **Çeviri Motoru:** `googletrans` API.
-
-* **Arayüz:** `tkinter` ile hafif ve şeffaf katman (Overlay).
-
-* **Görüntü İşleme:** Gelişmiş modda `Pillow` kullanarak kontrast artırma ve gürültü filtreleme.
-
-
-
-## ⚠️ İpucu
-
-En iyi sonuçlar için YouTube altyazı ayarlarından **"Arka Plan Opaklığı: %100"** ve **"Kenar Stili: Yok"** seçeneklerini kullanmanızı öneririm. Bu sayede OCR motoru harfleri çok daha net okuyacaktır.
-
-
+* Python 3.8+
+* NVIDIA GPU (CUDA desteği için önerilir)
+* Aktif internet bağlantısı (Google Translate API için)
 
 ---
-
-*Developed with ☕ and Ömer Faruk*
+## Developed by **[Omer Faruk](https://github.com/OmerFaruk025)**
